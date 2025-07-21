@@ -133,10 +133,44 @@
             50% { transform: rotate(90deg); }
             100% { transform: rotate(90deg); }
         }
+        
+        /* Control mode toggle */
+        #controlToggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: #cccccc;
+            font-size: 14px;
+            cursor: pointer;
+            display: none;
+            transition: all 0.3s ease;
+        }
+        
+        #controlToggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        #controlToggle.active {
+            background: rgba(0, 255, 255, 0.2);
+            border-color: #00ffff;
+            color: #00ffff;
+        }
+        
+        @media (max-width: 850px) {
+            #controlToggle {
+                display: block;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
+        <button id="controlToggle">Gyro: OFF</button>
         <div id="score"><span class="player-score">Player: 0</span> | <span class="computer-score">Computer: 0</span></div>
         <canvas id="gameCanvas" width="800" height="400"></canvas>
         <button id="startButton">Start Game</button>
@@ -158,6 +192,7 @@
         const startButton = document.getElementById('startButton');
         const instructionsElement = document.getElementById('instructions');
         const orientationMessage = document.getElementById('orientationMessage');
+        const controlToggle = document.getElementById('controlToggle');
         
         // Game variables
         let gameRunning = false;
@@ -223,6 +258,12 @@
         const keys = {};
         let touchY = null;
         let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Gyroscope controls
+        let useGyro = false;
+        let gyroPermission = false;
+        let baseGamma = 0; // Neutral position
+        let currentGamma = 0;
         
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
@@ -572,10 +613,86 @@
             } : { r: 255, g: 255, b: 255 };
         }
         
-        // Touch controls for mobile
+        // Mobile controls setup
         if (isMobile) {
             instructionsElement.textContent = 'Touch and drag to move your paddle';
             instructionsElement.classList.add('mobile');
+            
+            // Control toggle button
+            controlToggle.addEventListener('click', async () => {
+                if (!useGyro) {
+                    // Try to enable gyro
+                    const enabled = await enableGyroControls();
+                    if (enabled) {
+                        useGyro = true;
+                        controlToggle.textContent = 'Gyro: ON';
+                        controlToggle.classList.add('active');
+                        instructionsElement.textContent = 'Tilt your device to move the paddle';
+                        // Calibrate neutral position
+                        baseGamma = currentGamma;
+                    }
+                } else {
+                    // Disable gyro
+                    useGyro = false;
+                    controlToggle.textContent = 'Gyro: OFF';
+                    controlToggle.classList.remove('active');
+                    instructionsElement.textContent = 'Touch and drag to move your paddle';
+                }
+            });
+            
+            // Gyroscope event listeners
+            async function enableGyroControls() {
+                // Check if DeviceOrientationEvent is available
+                if (!window.DeviceOrientationEvent) {
+                    alert('Gyroscope not supported on this device');
+                    return false;
+                }
+                
+                // iOS 13+ requires permission
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const response = await DeviceOrientationEvent.requestPermission();
+                        if (response === 'granted') {
+                            gyroPermission = true;
+                        } else {
+                            alert('Permission to use gyroscope was denied');
+                            return false;
+                        }
+                    } catch (error) {
+                        alert('Error requesting gyroscope permission');
+                        return false;
+                    }
+                } else {
+                    // Non-iOS devices
+                    gyroPermission = true;
+                }
+                
+                return true;
+            }
+            
+            // Device orientation handler
+            window.addEventListener('deviceorientation', (event) => {
+                if (useGyro && gyroPermission && gameRunning) {
+                    // gamma is the left-to-right tilt in degrees (-90 to 90)
+                    currentGamma = event.gamma;
+                    const tilt = currentGamma - baseGamma;
+                    
+                    // Map tilt to paddle position
+                    // Tilt range: -30 to +30 degrees for full paddle movement
+                    const maxTilt = 30;
+                    const normalizedTilt = Math.max(-1, Math.min(1, tilt / maxTilt));
+                    
+                    // Convert to paddle position
+                    const centerY = canvas.height / 2;
+                    const moveRange = (canvas.height - paddleHeight) / 2;
+                    const targetY = centerY + (normalizedTilt * moveRange) - paddleHeight / 2;
+                    
+                    // Smooth movement
+                    const smoothing = 0.3;
+                    player.y = player.y + (targetY - player.y) * smoothing;
+                    player.y = Math.max(0, Math.min(canvas.height - paddleHeight, player.y));
+                }
+            });
             
             canvas.addEventListener('touchstart', (e) => {
                 e.preventDefault();
@@ -586,7 +703,7 @@
             
             canvas.addEventListener('touchmove', (e) => {
                 e.preventDefault();
-                if (touchY !== null && gameRunning) {
+                if (!useGyro && touchY !== null && gameRunning) {
                     const touch = e.touches[0];
                     const rect = canvas.getBoundingClientRect();
                     const currentY = touch.clientY - rect.top;

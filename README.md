@@ -12,6 +12,7 @@ A modern, colorful version of the classic Pong game with visual effects and part
 - Smooth trail effects
 - Responsive controls
 - **Mobile support with touch controls**
+- **Gyroscope controls for immersive mobile gameplay**
 - **Automatic landscape mode detection for mobile devices**
 
 ## How to Play
@@ -20,7 +21,10 @@ A modern, colorful version of the classic Pong game with visual effects and part
 - Use **W/S** keys or **Up/Down** arrows to move your paddle
 
 ### Mobile
-- Touch and drag on the screen to control your paddle
+- **Touch Controls**: Touch and drag on the screen to control your paddle
+- **Gyroscope Controls**: Tap the "Gyro" button to enable tilt controls
+  - Tilt your device left/right to move the paddle up/down
+  - The neutral position is calibrated when you enable gyro mode
 - Play in landscape mode for the best experience
 
 ### Game Rules

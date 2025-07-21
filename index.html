@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a2e 0%, #1e0033 100%);
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameContainer {
+            text-align: center;
+        }
+        
+        #gameCanvas {
+            border: 2px solid #666;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+        
+        #score {
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        
+        .player-score {
+            color: #00ffff;
+        }
+        
+        .computer-score {
+            color: #ff0066;
+        }
+        
+        #instructions {
+            color: #cccccc;
+            margin-top: 10px;
+            font-size: 14px;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        }
+        
+        #startButton {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            color: #000;
+            font-weight: bold;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+        
+        #startButton:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.7);
+        }
+        
+        #startButton.paused {
+            background: linear-gradient(135deg, #ffa500 0%, #ff8c00 100%);
+            box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score"><span class="player-score">Player: 0</span> | <span class="computer-score">Computer: 0</span></div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <button id="startButton">Start Game</button>
+        <div id="instructions">
+            Use W/S keys or Up/Down arrows to move your paddle
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const startButton = document.getElementById('startButton');
+        
+        // Game variables
+        let gameRunning = false;
+        let playerScore = 0;
+        let computerScore = 0;
+        
+        // Colors
+        const colors = {
+            player: '#00ffff',
+            computer: '#ff0066',
+            ball: '#ffffff',
+            ballTrail: [],
+            centerLine: '#666666'
+        };
+        
+        // Ball trail for visual effect
+        const ballTrail = [];
+        const maxTrailLength = 20;
+        
+        // Particle system for effects
+        const particles = [];
+        
+        // Collision flash effect
+        let collisionFlash = {
+            active: false,
+            x: 0,
+            y: 0,
+            color: '',
+            alpha: 0
+        };
+        
+        // Paddle properties
+        const paddleWidth = 10;
+        const paddleHeight = 80;
+        const paddleSpeed = 5;
+        
+        // Player paddle
+        const player = {
+            x: 20,
+            y: canvas.height / 2 - paddleHeight / 2,
+            dy: 0
+        };
+        
+        // Computer paddle
+        const computer = {
+            x: canvas.width - 30,
+            y: canvas.height / 2 - paddleHeight / 2,
+            dy: 0
+        };
+        
+        // Ball properties
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 8,
+            dx: 4,
+            dy: 3,
+            speed: 5,
+            lastHitBy: null
+        };
+        
+        // Input handling
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // Reset ball to center
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.speed;
+            ball.dy = (Math.random() * 2 - 1) * ball.speed;
+        }
+        
+        // Update paddle positions
+        function updatePaddles() {
+            // Player controls
+            if (keys['w'] || keys['W'] || keys['ArrowUp']) {
+                player.dy = -paddleSpeed;
+            } else if (keys['s'] || keys['S'] || keys['ArrowDown']) {
+                player.dy = paddleSpeed;
+            } else {
+                player.dy = 0;
+            }
+            
+            // Update player position
+            player.y += player.dy;
+            player.y = Math.max(0, Math.min(canvas.height - paddleHeight, player.y));
+            
+            // Simple AI for computer paddle
+            const computerCenter = computer.y + paddleHeight / 2;
+            if (ball.y < computerCenter - 20) {
+                computer.dy = -paddleSpeed * 0.8;
+            } else if (ball.y > computerCenter + 20) {
+                computer.dy = paddleSpeed * 0.8;
+            } else {
+                computer.dy = 0;
+            }
+            
+            // Update computer position
+            computer.y += computer.dy;
+            computer.y = Math.max(0, Math.min(canvas.height - paddleHeight, computer.y));
+        }
+        
+        // Update ball position and check collisions
+        function updateBall() {
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+            
+            // Top and bottom wall collisions
+            if (ball.y - ball.radius <= 0 || ball.y + ball.radius >= canvas.height) {
+                ball.dy = -ball.dy;
+                createParticles(ball.x, ball.y, '#ffffff', 5);
+            }
+            
+            // Player paddle collision
+            if (ball.x - ball.radius <= player.x + paddleWidth &&
+                ball.x + ball.radius >= player.x &&
+                ball.y >= player.y &&
+                ball.y <= player.y + paddleHeight &&
+                ball.dx < 0) {
+                ball.dx = -ball.dx;
+                
+                // Add some spin based on where the ball hits the paddle
+                const hitPos = (ball.y - player.y) / paddleHeight;
+                ball.dy = 8 * (hitPos - 0.5);
+                
+                // Create collision effect
+                createCollisionEffect(ball.x, ball.y, colors.player);
+                createParticles(ball.x, ball.y, colors.player, 10);
+                ball.lastHitBy = 'player';
+            }
+            
+            // Computer paddle collision
+            if (ball.x + ball.radius >= computer.x &&
+                ball.x - ball.radius <= computer.x + paddleWidth &&
+                ball.y >= computer.y &&
+                ball.y <= computer.y + paddleHeight &&
+                ball.dx > 0) {
+                ball.dx = -ball.dx;
+                
+                // Add some spin based on where the ball hits the paddle
+                const hitPos = (ball.y - computer.y) / paddleHeight;
+                ball.dy = 8 * (hitPos - 0.5);
+                
+                // Create collision effect
+                createCollisionEffect(ball.x, ball.y, colors.computer);
+                createParticles(ball.x, ball.y, colors.computer, 10);
+                ball.lastHitBy = 'computer';
+            }
+            
+            // Score points
+            if (ball.x < 0) {
+                computerScore++;
+                updateScore();
+                createCelebrationParticles(canvas.width - 100, canvas.height / 2, colors.computer);
+                resetBall();
+            } else if (ball.x > canvas.width) {
+                playerScore++;
+                updateScore();
+                createCelebrationParticles(100, canvas.height / 2, colors.player);
+                resetBall();
+            }
+        }
+        
+        // Update score display
+        function updateScore() {
+            scoreElement.innerHTML = `<span class="player-score">Player: ${playerScore}</span> | <span class="computer-score">Computer: ${computerScore}</span>`;
+            
+            // Check for winner
+            if (playerScore >= 5 || computerScore >= 5) {
+                gameRunning = false;
+                const winner = playerScore >= 5 ? 'Player' : 'Computer';
+                const winnerColor = playerScore >= 5 ? colors.player : colors.computer;
+                
+                // Create victory particles
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        createCelebrationParticles(
+                            Math.random() * canvas.width,
+                            Math.random() * canvas.height,
+                            winnerColor
+                        );
+                    }, i * 200);
+                }
+                
+                setTimeout(() => {
+                    alert(`${winner} wins!`);
+                }, 1000);
+                
+                playerScore = 0;
+                computerScore = 0;
+                updateScore();
+                startButton.textContent = 'Start Game';
+                startButton.classList.remove('paused');
+            }
+        }
+        
+        // Draw everything
+        function draw() {
+            // Clear canvas with slight transparency for trail effect
+            ctx.fillStyle = 'rgba(10, 10, 46, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw center line
+            ctx.setLineDash([5, 15]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = colors.centerLine;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.lineWidth = 1;
+            
+            // Draw player paddle with glow
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = colors.player;
+            ctx.fillStyle = colors.player;
+            ctx.fillRect(player.x, player.y, paddleWidth, paddleHeight);
+            
+            // Draw computer paddle with glow
+            ctx.shadowColor = colors.computer;
+            ctx.fillStyle = colors.computer;
+            ctx.fillRect(computer.x, computer.y, paddleWidth, paddleHeight);
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+            
+            // Update ball trail
+            ballTrail.push({ x: ball.x, y: ball.y });
+            if (ballTrail.length > maxTrailLength) {
+                ballTrail.shift();
+            }
+            
+            // Draw ball trail
+            for (let i = 0; i < ballTrail.length; i++) {
+                const trail = ballTrail[i];
+                const alpha = (i / ballTrail.length) * 0.5;
+                let trailColor = colors.ball;
+                
+                // Color trail based on last hit
+                if (ball.lastHitBy === 'player') {
+                    trailColor = colors.player;
+                } else if (ball.lastHitBy === 'computer') {
+                    trailColor = colors.computer;
+                }
+                
+                const rgb = hexToRgb(trailColor);
+                ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(trail.x, trail.y, ball.radius * (i / ballTrail.length), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Determine ball color based on speed and last hit
+            let ballColor = colors.ball;
+            const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+            
+            if (speed > 8) {
+                ballColor = '#ff4444'; // Red for fast
+            } else if (speed > 6) {
+                ballColor = '#ffaa00'; // Orange for medium
+            } else if (ball.lastHitBy === 'player') {
+                ballColor = colors.player;
+            } else if (ball.lastHitBy === 'computer') {
+                ballColor = colors.computer;
+            }
+            
+            // Draw ball with glow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = ballColor;
+            ctx.fillStyle = ballColor;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Draw effects on top
+            drawEffects();
+        }
+        
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            updatePaddles();
+            updateBall();
+            updateParticles();
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start/pause game
+        startButton.addEventListener('click', () => {
+            if (!gameRunning) {
+                gameRunning = true;
+                startButton.textContent = 'Pause Game';
+                startButton.classList.remove('paused');
+                resetBall();
+                gameLoop();
+            } else {
+                gameRunning = false;
+                startButton.textContent = 'Resume Game';
+                startButton.classList.add('paused');
+            }
+        });
+        
+        // Create collision effect
+        function createCollisionEffect(x, y, color) {
+            collisionFlash.active = true;
+            collisionFlash.x = x;
+            collisionFlash.y = y;
+            collisionFlash.color = color;
+            collisionFlash.alpha = 1;
+        }
+        
+        // Create particles
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    color: color,
+                    alpha: 1,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+        
+        // Create celebration particles
+        function createCelebrationParticles(x, y, color) {
+            for (let i = 0; i < 30; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12,
+                    color: color,
+                    alpha: 1,
+                    size: Math.random() * 6 + 3
+                });
+            }
+        }
+        
+        // Update particles
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.02;
+                p.size *= 0.98;
+                
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            
+            // Update collision flash
+            if (collisionFlash.active) {
+                collisionFlash.alpha -= 0.05;
+                if (collisionFlash.alpha <= 0) {
+                    collisionFlash.active = false;
+                }
+            }
+        }
+        
+        // Draw particles and effects
+        function drawEffects() {
+            // Draw particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw collision flash
+            if (collisionFlash.active) {
+                ctx.globalAlpha = collisionFlash.alpha * 0.3;
+                ctx.fillStyle = collisionFlash.color;
+                ctx.beginPath();
+                ctx.arc(collisionFlash.x, collisionFlash.y, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.globalAlpha = 1;
+        }
+        
+        // Helper function to convert hex to RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 255, g: 255, b: 255 };
+        }
+        
+        // Initial draw
+        draw();
+    </script>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 A modern, colorful version of the classic Pong game with visual effects and particle systems.
 
+*Built in 5 minutes using [Claude Code](https://github.com/anthropics/claude-code) 🚀*
+
 ## Features
 
 - Beautiful gradient background

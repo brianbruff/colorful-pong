@@ -11,10 +11,19 @@ A modern, colorful version of the classic Pong game with visual effects and part
 - Celebration animations on scoring
 - Smooth trail effects
 - Responsive controls
+- **Mobile support with touch controls**
+- **Automatic landscape mode detection for mobile devices**
 
 ## How to Play
 
+### Desktop
 - Use **W/S** keys or **Up/Down** arrows to move your paddle
+
+### Mobile
+- Touch and drag on the screen to control your paddle
+- Play in landscape mode for the best experience
+
+### Game Rules
 - First to 5 points wins
 - The ball speeds up and changes color as the game progresses
 

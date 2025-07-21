@@ -23,7 +23,7 @@ A modern, colorful version of the classic Pong game with visual effects and part
 ### Mobile
 - **Touch Controls**: Touch and drag on the screen to control your paddle
 - **Gyroscope Controls**: Tap the "Gyro" button to enable tilt controls
-  - Tilt your device left/right to move the paddle up/down
+  - Tilt left to move paddle up, tilt right to move paddle down
   - The neutral position is calibrated when you enable gyro mode
 - Play in landscape mode for the best experience
 
